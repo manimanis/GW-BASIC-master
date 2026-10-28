@@ -1,0 +1,10 @@
+C:/Users/Cyberbox/Downloads/GW-BASIC-master/build/CMakeFiles/gwbasic.dir
+C:/Users/Cyberbox/Downloads/GW-BASIC-master/build/CMakeFiles/test_module1.dir
+C:/Users/Cyberbox/Downloads/GW-BASIC-master/build/CMakeFiles/test_module2.dir
+C:/Users/Cyberbox/Downloads/GW-BASIC-master/build/CMakeFiles/test_module3.dir
+C:/Users/Cyberbox/Downloads/GW-BASIC-master/build/CMakeFiles/test_module4.dir
+C:/Users/Cyberbox/Downloads/GW-BASIC-master/build/CMakeFiles/test_module5.dir
+C:/Users/Cyberbox/Downloads/GW-BASIC-master/build/CMakeFiles/test_advanced.dir
+C:/Users/Cyberbox/Downloads/GW-BASIC-master/build/CMakeFiles/test.dir
+C:/Users/Cyberbox/Downloads/GW-BASIC-master/build/CMakeFiles/edit_cache.dir
+C:/Users/Cyberbox/Downloads/GW-BASIC-master/build/CMakeFiles/rebuild_cache.dir

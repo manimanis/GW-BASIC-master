@@ -1,0 +1,39 @@
+10 SCREEN 1
+20 CLS
+30 REM === GW-BASIC SDL2 Graphics Demo ===
+40 COLOR 0, 1
+50 REM --- Title bar ---
+60 LINE (0,0)-(319,10),2,BF
+70 FOR X = 0 TO 319 STEP 2
+80   PSET (X, 0), 10
+90   PSET (X, 10), 10
+100 NEXT X
+110 REM --- Circles ---
+120 CIRCLE (80, 100), 50, 12
+130 CIRCLE (80, 100), 35, 11
+140 CIRCLE (80, 100), 20, 9
+150 PAINT (80, 100), 9, 9
+160 PAINT (80, 100), 11, 11
+170 PAINT (80, 100), 12, 12
+180 REM --- Rectangle box ---
+190 LINE (150,60)-(280,140),14,B
+200 LINE (155,65)-(275,135),13,B
+210 LINE (160,70)-(270,130),15,B
+220 REM --- Diagonal lines ---
+230 FOR I = 0 TO 7
+240   LINE (160 + I*15, 75)-(265 - I*5, 125), I + 8
+250 NEXT I
+260 REM --- Bottom wave ---
+270 FOR X = 0 TO 318
+280   Y = 180 + INT(10 * SIN(X * 3.14159 / 40))
+281   PSET (X, Y), 14
+282   PSET (X, Y+1), 6
+283 NEXT X
+290 REM --- Corner dots ---
+300 FOR I = 0 TO 15
+310   PSET (I, I), I
+320   PSET (319-I, I), I
+330   PSET (I, 199-I), I
+340   PSET (319-I, 199-I), I
+350 NEXT I
+360 END

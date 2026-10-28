@@ -1,0 +1,2 @@
+RECORD 1: Microsoft GW-BASIC C++ Port
+ 3.14159
