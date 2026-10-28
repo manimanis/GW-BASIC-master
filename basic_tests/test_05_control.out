@@ -1,4 +1,4 @@
-=== TEST 05 : STRUCTURES DE CONTROLE ===
+[3;1H[4;1H[6;1H[8;1H[9;1H[10;1H[11;1H[12;1H=== TEST 05 : STRUCTURES DE CONTROLE ===
 
 --------------------------------------------------------
 Suite   : TEST 05 : STRUCTURES DE CONTROLE
@@ -6,3 +6,5 @@ Total   :  18 assertions
 Reussis :  18
 Echecs  :  0
 TEST 05 PASSED
+
+Appuyez sur une touche (dans la fenetre ou la console) pour fermer...

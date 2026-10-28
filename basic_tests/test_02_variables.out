@@ -1,4 +1,4 @@
-=== TEST 02 : VARIABLES & TABLEAUX ===
+[2;1H[3;1H[5;1H[7;1H[8;1H[9;1H[10;1H[11;1H=== TEST 02 : VARIABLES & TABLEAUX ===
 
 --------------------------------------------------------
 Suite   : TEST 02 : VARIABLES & TABLEAUX
@@ -6,3 +6,5 @@ Total   :  34 assertions
 Reussis :  34
 Echecs  :  0
 TEST 02 PASSED
+
+Appuyez sur une touche (dans la fenetre ou la console) pour fermer...

@@ -1,4 +1,4 @@
-=== TEST 09 : FICHIERS & ENTREES/SORTIES ===
+[3;1H[4;1H[6;1H[8;1H[9;1H[10;1H[11;1H[12;1H=== TEST 09 : FICHIERS & ENTREES/SORTIES ===
 
 --------------------------------------------------------
 Suite   : TEST 09 : FICHIERS & ENTREES/SORTIES
@@ -6,3 +6,5 @@ Total   :  8 assertions
 Reussis :  8
 Echecs  :  0
 TEST 09 PASSED
+
+Appuyez sur une touche (dans la fenetre ou la console) pour fermer...

@@ -83,12 +83,14 @@ bool SDLWindow::init(int width, int height) {
 
     pixel_buffer_.resize(static_cast<size_t>(width_ * height_), 0xFF000000);
     is_open_ = true;
+    SDL_StartTextInput();
     return true;
 }
 
 void SDLWindow::close() {
     if (!is_open_) return;
     is_open_ = false;
+    SDL_StopTextInput();
     if (texture_) { SDL_DestroyTexture(texture_); texture_ = nullptr; }
     if (renderer_) { SDL_DestroyRenderer(renderer_); renderer_ = nullptr; }
     if (window_) { SDL_DestroyWindow(window_); window_ = nullptr; }
@@ -136,25 +138,113 @@ void SDLWindow::pollEvents() {
             close();
             return;
         }
+
+        // Text input handles printable characters (including AZERTY keys, accented chars, NumPad digits)
+        if (event.type == SDL_TEXTINPUT) {
+            const char* ptr = event.text.text;
+            while (*ptr) {
+                unsigned char b1 = static_cast<unsigned char>(*ptr);
+                if (b1 < 0x80) {
+                    // Standard 7-bit ASCII
+                    key_queue_.push_back(std::string(1, static_cast<char>(b1)));
+                    ptr++;
+                } else if ((b1 & 0xE0) == 0xC0 && *(ptr + 1)) {
+                    // 2-byte UTF-8 sequence (French accents etc.)
+                    unsigned char b2 = static_cast<unsigned char>(*(ptr + 1));
+                    uint16_t unicode = ((b1 & 0x1F) << 6) | (b2 & 0x3F);
+                    ptr += 2;
+                    // Convert common Latin-1 / CP437 accented characters
+                    char cp437 = '\0';
+                    switch (unicode) {
+                        case 0x00E9: cp437 = static_cast<char>(0x82); break; // é
+                        case 0x00E0: cp437 = static_cast<char>(0x85); break; // à
+                        case 0x00E8: cp437 = static_cast<char>(0x8A); break; // è
+                        case 0x00F9: cp437 = static_cast<char>(0x97); break; // ù
+                        case 0x00E2: cp437 = static_cast<char>(0x83); break; // â
+                        case 0x00EA: cp437 = static_cast<char>(0x88); break; // ê
+                        case 0x00EE: cp437 = static_cast<char>(0x8C); break; // î
+                        case 0x00F4: cp437 = static_cast<char>(0x93); break; // ô
+                        case 0x00FB: cp437 = static_cast<char>(0x96); break; // û
+                        case 0x00E7: cp437 = static_cast<char>(0x87); break; // ç
+                        case 0x00EB: cp437 = static_cast<char>(0x89); break; // ë
+                        case 0x00EF: cp437 = static_cast<char>(0x8B); break; // ï
+                        case 0x00FC: cp437 = static_cast<char>(0x81); break; // ü
+                        case 0x00E4: cp437 = static_cast<char>(0x84); break; // ä
+                        case 0x00F6: cp437 = static_cast<char>(0x94); break; // ö
+                        case 0x00C9: cp437 = static_cast<char>(0x90); break; // É
+                        case 0x00C0: cp437 = static_cast<char>(0x41); break; // À -> A
+                        case 0x00C8: cp437 = static_cast<char>(0x45); break; // È -> E
+                        case 0x00C7: cp437 = static_cast<char>(0x80); break; // Ç
+                        case 0x00B0: cp437 = static_cast<char>(0xF8); break; // °
+                        default:
+                            if (unicode < 256) cp437 = static_cast<char>(unicode);
+                            break;
+                    }
+                    if (cp437 != '\0') {
+                        key_queue_.push_back(std::string(1, cp437));
+                    }
+                } else {
+                    ptr++;
+                }
+            }
+        }
+
+        // Key down handles control keys and extended keystrokes (arrows, function keys)
         if (event.type == SDL_KEYDOWN) {
             SDL_Keycode sym = event.key.keysym.sym;
+            Uint16 mod = event.key.keysym.mod;
+
             if (sym == SDLK_ESCAPE) {
-                close();
-                return;
-            }
-            // Map printable ASCII keys for INKEY$
-            if (sym >= SDLK_SPACE && sym <= SDLK_z) {
-                char c = static_cast<char>(sym);
-                // Apply shift for uppercase
-                const Uint8* state = SDL_GetKeyboardState(nullptr);
-                if (state[SDL_SCANCODE_LSHIFT] || state[SDL_SCANCODE_RSHIFT]) {
-                    c = static_cast<char>(std::toupper(static_cast<unsigned char>(c)));
-                }
-                key_queue_.push_back(std::string(1, c));
+                // CHR$(27) for GW-BASIC
+                key_queue_.push_back("\x1B");
             } else if (sym == SDLK_RETURN || sym == SDLK_KP_ENTER) {
                 key_queue_.push_back("\r");
             } else if (sym == SDLK_BACKSPACE) {
                 key_queue_.push_back("\x08");
+            } else if (sym == SDLK_TAB) {
+                key_queue_.push_back("\t");
+            } else if (sym == SDLK_UP) {
+                key_queue_.push_back(std::string("\0H", 2));
+            } else if (sym == SDLK_DOWN) {
+                key_queue_.push_back(std::string("\0P", 2));
+            } else if (sym == SDLK_LEFT) {
+                key_queue_.push_back(std::string("\0K", 2));
+            } else if (sym == SDLK_RIGHT) {
+                key_queue_.push_back(std::string("\0M", 2));
+            } else if (sym == SDLK_HOME) {
+                key_queue_.push_back(std::string("\0G", 2));
+            } else if (sym == SDLK_END) {
+                key_queue_.push_back(std::string("\0O", 2));
+            } else if (sym == SDLK_PAGEUP) {
+                key_queue_.push_back(std::string("\0I", 2));
+            } else if (sym == SDLK_PAGEDOWN) {
+                key_queue_.push_back(std::string("\0Q", 2));
+            } else if (sym == SDLK_INSERT) {
+                key_queue_.push_back(std::string("\0R", 2));
+            } else if (sym == SDLK_DELETE) {
+                key_queue_.push_back(std::string("\0S", 2));
+            } else if (sym >= SDLK_F1 && sym <= SDLK_F10) {
+                char scan = static_cast<char>(59 + (sym - SDLK_F1));
+                key_queue_.push_back(std::string{'\0', scan});
+            } else if (sym == SDLK_F11) {
+                key_queue_.push_back(std::string{'\0', static_cast<char>(133)});
+            } else if (sym == SDLK_F12) {
+                key_queue_.push_back(std::string{'\0', static_cast<char>(134)});
+            } else if ((mod & KMOD_CTRL) && sym >= SDLK_a && sym <= SDLK_z) {
+                char c = static_cast<char>(sym - SDLK_a + 1);
+                key_queue_.push_back(std::string(1, c));
+            } else if (!(mod & KMOD_NUM)) {
+                // Keypad navigation with NumLock off
+                if (sym == SDLK_KP_8) key_queue_.push_back(std::string("\0H", 2));
+                else if (sym == SDLK_KP_2) key_queue_.push_back(std::string("\0P", 2));
+                else if (sym == SDLK_KP_4) key_queue_.push_back(std::string("\0K", 2));
+                else if (sym == SDLK_KP_6) key_queue_.push_back(std::string("\0M", 2));
+                else if (sym == SDLK_KP_7) key_queue_.push_back(std::string("\0G", 2));
+                else if (sym == SDLK_KP_1) key_queue_.push_back(std::string("\0O", 2));
+                else if (sym == SDLK_KP_9) key_queue_.push_back(std::string("\0I", 2));
+                else if (sym == SDLK_KP_3) key_queue_.push_back(std::string("\0Q", 2));
+                else if (sym == SDLK_KP_0) key_queue_.push_back(std::string("\0R", 2));
+                else if (sym == SDLK_KP_PERIOD) key_queue_.push_back(std::string("\0S", 2));
             }
         }
         if (event.type == SDL_WINDOWEVENT) {

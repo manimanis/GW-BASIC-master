@@ -1,4 +1,4 @@
-=== TEST 01 : PRINT / TAB / SPC ===
+[2;1H[3;1H[5;1H[6;1H[7;1H[8;1H[9;1H[10;1H=== TEST 01 : PRINT / TAB / SPC ===
 
 --------------------------------------------------------
 Suite   : TEST 01 : PRINT / TAB / SPC
@@ -6,3 +6,5 @@ Total   :  7 assertions
 Reussis :  7
 Echecs  :  0
 TEST 01 PASSED
+
+Appuyez sur une touche (dans la fenetre ou la console) pour fermer...

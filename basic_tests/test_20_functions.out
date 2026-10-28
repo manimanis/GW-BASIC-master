@@ -1,4 +1,4 @@
-=== TEST 20 : FONCTIONS INTEGREES AVANCEES ===
+[3;1H[4;1H[6;1H[8;1H[9;1H[10;1H[11;1H[12;1H=== TEST 20 : FONCTIONS INTEGREES AVANCEES ===
 
 --------------------------------------------------------
 Suite   : TEST 20 : FONCTIONS INTEGREES AVANCEES
@@ -6,3 +6,5 @@ Total   :  68 assertions
 Reussis :  68
 Echecs  :  0
 TEST 20 PASSED
+
+Appuyez sur une touche (dans la fenetre ou la console) pour fermer...

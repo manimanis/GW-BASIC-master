@@ -4,8 +4,49 @@
 #include <iostream>
 #include <ctime>
 #include <iomanip>
+#include <thread>
+#include <atomic>
+#include <cmath>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 namespace gwbasic {
+
+namespace {
+
+static std::atomic<bool> g_sound_stop{false};
+static std::thread g_sound_thread;
+
+static void stopSoundAsync() {
+    g_sound_stop = true;
+    if (g_sound_thread.joinable()) {
+        g_sound_thread.join();
+    }
+}
+
+static void playToneAsync(int freq, int duration_ms) {
+    stopSoundAsync();
+#ifdef _WIN32
+    if (freq < 37 || duration_ms <= 0) return;
+    g_sound_stop = false;
+    int total_ms = std::min(duration_ms, 10000);
+    g_sound_thread = std::thread([freq, total_ms]() {
+        int elapsed = 0;
+        int chunk = 40;
+        while (elapsed < total_ms && !g_sound_stop.load()) {
+            int this_chunk = std::min(chunk, total_ms - elapsed);
+            ::Beep(static_cast<DWORD>(freq), static_cast<DWORD>(this_chunk));
+            elapsed += this_chunk;
+        }
+    });
+#else
+    (void)freq;
+    (void)duration_ms;
+#endif
+}
+
+} // anonymous namespace
 
 BasicInterpreter::BasicInterpreter()
     : eval_(mem_, files_, console_, &gfx_) {}
@@ -495,14 +536,23 @@ void BasicInterpreter::executeSingleStatement(std::string_view stmt, bool& branc
         }
     } else if (match_kw("CLS")) {
         gfx_.cls(0);
+        console_.locate(1, 1);
     } else if (match_kw("SCREEN")) {
         // SCREEN mode[, colorswitch[, apage[, vpage]]]
         while (!stmt.empty() && std::isspace(static_cast<unsigned char>(stmt.front()))) stmt.remove_prefix(1);
         if (!stmt.empty()) {
             int mode = static_cast<int>(BasicEvaluator::toDouble(eval_.evaluate(stmt)));
-            if (mode == 0) gfx_.setMode(ScreenMode::Text);
-            else if (mode == 1) gfx_.setMode(ScreenMode::MediumRes);
-            else if (mode == 2) gfx_.setMode(ScreenMode::HighRes);
+            if (mode == 0) {
+                gfx_.setMode(ScreenMode::Text);
+                console_.setWidth(80);
+            } else if (mode == 1) {
+                gfx_.setMode(ScreenMode::MediumRes);
+                console_.setWidth(40);
+            } else if (mode == 2) {
+                gfx_.setMode(ScreenMode::HighRes);
+                console_.setWidth(80);
+            }
+            console_.locate(1, 1);
         }
     } else if (match_kw("PRESET")) {
         // PRESET (x,y)[,color] - draws in background color (color 0)
@@ -517,6 +567,19 @@ void BasicInterpreter::executeSingleStatement(std::string_view stmt, bool& branc
         handlePaint(stmt);
     } else if (match_kw("DRAW")) {
         handleDraw(stmt);
+    } else if (match_kw("GET")) {
+        handleGraphicsGet(stmt);
+    } else if (match_kw("PUT")) {
+        handleGraphicsPut(stmt);
+    } else if (match_kw("PLAY")) {
+        handlePlay(stmt);
+    } else if (match_kw("OPTION BASE")) {
+        while (!stmt.empty() && std::isspace(static_cast<unsigned char>(stmt.front()))) stmt.remove_prefix(1);
+        if (!stmt.empty() && (stmt.front() == '0' || stmt.front() == '1')) stmt.remove_prefix(1);
+    } else if (match_kw("KEY")) {
+        while (!stmt.empty() && stmt.front() != ':') stmt.remove_prefix(1);
+    } else if (match_kw("DEFINT") || match_kw("DEFSNG") || match_kw("DEFDBL") || match_kw("DEFSTR")) {
+        while (!stmt.empty() && stmt.front() != ':') stmt.remove_prefix(1);
     } else if (match_kw("CLEAR")) {
         mem_.clearVariables();
     } else if (match_kw("ERROR")) {
@@ -748,7 +811,29 @@ void BasicInterpreter::handlePrint(std::string_view& stmt) {
     if (file_num > 0) {
         files_.writeString(file_num, line_out.str());
     } else {
-        output_ << line_out.str();
+        std::string s = line_out.str();
+        output_ << s;
+        printTextToScreen(s);
+    }
+}
+
+void BasicInterpreter::printTextToScreen(const std::string& text) {
+    if (gfx_.getMode() != ScreenMode::Text) {
+        int row = console_.getCsrlin();
+        int col = console_.getPos();
+        uint8_t fg = console_.getForeground();
+        if (gfx_.getMode() == ScreenMode::MediumRes) {
+            fg = fg % 4;
+            if (fg == 0) fg = 3; // CGA default text color
+        } else if (gfx_.getMode() == ScreenMode::HighRes) {
+            fg = 1;
+        }
+        uint8_t bg = console_.getBackground();
+        gfx_.printString(text, row, col, fg, bg);
+        console_.locate(row, col);
+        if (step_hook_) {
+            step_hook_();
+        }
     }
 }
 
@@ -1093,6 +1178,11 @@ void BasicInterpreter::handleNext(std::string_view& stmt) {
         current_stmt_idx_ = loop.body_stmt_idx;
     } else {
         for_stack_.erase(for_stack_.begin() + stack_idx);
+        while (!stmt.empty() && std::isspace(static_cast<unsigned char>(stmt.front()))) stmt.remove_prefix(1);
+        if (!stmt.empty() && stmt.front() == ',') {
+            stmt.remove_prefix(1);
+            handleNext(stmt);
+        }
     }
 }
 
@@ -1375,18 +1465,119 @@ void BasicInterpreter::handleLineInput(std::string_view& stmt) {
         output_.clear();
     }
 
-    std::cout << prompt;
-    std::cout.flush();
-    std::string user_input;
-    if (std::getline(std::cin, user_input)) {
+    std::string user_input = readConsoleLine(prompt);
+    if (is_running_) {
         if (is_array) {
             mem_.setArrayElement(var_name, indices, user_input);
         } else {
             mem_.setVariable(var_name, user_input);
         }
-    } else {
-        is_running_ = false;
     }
+}
+
+std::string BasicInterpreter::readConsoleLine(const std::string& prompt) {
+    bool in_graphics = (gfx_.getMode() != ScreenMode::Text);
+
+    if (in_graphics) {
+        printTextToScreen(prompt);
+    }
+    std::cout << prompt;
+    std::cout.flush();
+
+    if (!in_graphics) {
+        std::string line;
+        if (!std::getline(std::cin, line)) {
+            is_running_ = false;
+            return "";
+        }
+        return line;
+    }
+
+    std::string line;
+    int cursor_blink = 0;
+    bool cursor_visible = false;
+
+    auto draw_cursor = [&](bool show) {
+        if (!in_graphics) return;
+        int r = console_.getCsrlin();
+        int c = console_.getPos();
+        int max_cols = (gfx_.getMode() == ScreenMode::MediumRes) ? 40 : 80;
+        if (c > max_cols) return;
+        int px = (c - 1) * 8;
+        int py = (r - 1) * 8;
+        if (px >= 0 && px + 8 <= gfx_.getWidth() && py >= 0 && py + 8 <= gfx_.getHeight()) {
+            uint8_t color = show ? 3 : console_.getBackground();
+            for (int cr = 6; cr < 8; ++cr) {
+                for (int cc = 0; cc < 8; ++cc) {
+                    gfx_.pset(px + cc, py + cr, color);
+                }
+            }
+            if (step_hook_) step_hook_();
+        }
+    };
+
+    while (is_running_) {
+        if (step_hook_) {
+            step_hook_();
+        }
+
+        std::string k = console_.inkey();
+        if (!k.empty()) {
+            if (k == "\r" || k == "\n") {
+                draw_cursor(false);
+                printTextToScreen("\n");
+                std::cout << "\n";
+                std::cout.flush();
+                return line;
+            } else if (k == "\x08") { // Backspace
+                if (!line.empty()) {
+                    draw_cursor(false);
+                    line.pop_back();
+                    int r = console_.getCsrlin();
+                    int c = console_.getPos();
+                    if (c > 1) {
+                        c--;
+                        console_.locate(r, c);
+                        gfx_.drawChar((c - 1) * 8, (r - 1) * 8, ' ', 3, console_.getBackground(), false);
+                        if (step_hook_) step_hook_();
+                    }
+                    std::cout << "\b \b";
+                    std::cout.flush();
+                }
+            } else if (k == "\x1B") { // Escape
+                draw_cursor(false);
+                while (!line.empty()) {
+                    line.pop_back();
+                    int r = console_.getCsrlin();
+                    int c = console_.getPos();
+                    if (c > 1) {
+                        c--;
+                        console_.locate(r, c);
+                        gfx_.drawChar((c - 1) * 8, (r - 1) * 8, ' ', 3, console_.getBackground(), false);
+                    }
+                    std::cout << "\b \b";
+                }
+                std::cout.flush();
+                if (step_hook_) step_hook_();
+            } else if (k.size() == 1 && static_cast<unsigned char>(k[0]) >= 32) {
+                draw_cursor(false);
+                line += k;
+                printTextToScreen(k);
+                std::cout << k;
+                std::cout.flush();
+            }
+        } else {
+            cursor_blink++;
+            if (cursor_blink % 25 == 0) {
+                cursor_visible = !cursor_visible;
+                draw_cursor(cursor_visible);
+            }
+            std::this_thread::sleep_for(std::chrono::milliseconds(10));
+        }
+    }
+
+    draw_cursor(false);
+    return line;
 }
 
 void BasicInterpreter::handleInput(std::string_view& stmt) {
@@ -1593,20 +1784,11 @@ void BasicInterpreter::handleInput(std::string_view& stmt) {
     };
 
     while (values.size() < targets.size() && is_running_) {
-        if (is_first_line) {
-            std::cout << prompt;
-            std::cout.flush();
-            is_first_line = false;
-        } else {
-            std::cout << "?? ";
-            std::cout.flush();
-        }
+        std::string cur_prompt = is_first_line ? prompt : "?? ";
+        is_first_line = false;
 
-        std::string user_line;
-        if (!std::getline(std::cin, user_line)) {
-            is_running_ = false;
-            return;
-        }
+        std::string user_line = readConsoleLine(cur_prompt);
+        if (!is_running_) return;
 
         auto tokens = tokenize_line(user_line, values.size());
         if (tokens.empty() && values.empty()) {
@@ -1623,6 +1805,9 @@ void BasicInterpreter::handleInput(std::string_view& stmt) {
     if (values.size() > targets.size()) {
         std::cout << "?Extra ignored\n";
         std::cout.flush();
+        if (gfx_.getMode() != ScreenMode::Text) {
+            printTextToScreen("?Extra ignored\n");
+        }
     }
 
     // Assign to targets
@@ -1696,6 +1881,154 @@ void BasicInterpreter::handleDraw(std::string_view& stmt) {
     VariableValue val = eval_.evaluate(stmt);
     std::string commands = BasicEvaluator::toString(val);
     gfx_.draw(commands);
+}
+
+void BasicInterpreter::handleGraphicsGet(std::string_view& stmt) {
+    // Syntax: GET [STEP] (x1, y1)-[STEP](x2, y2), arrayname[(index)]
+    while (!stmt.empty() && std::isspace(static_cast<unsigned char>(stmt.front()))) stmt.remove_prefix(1);
+    bool step1 = false;
+    if (stmt.size() >= 4) {
+        std::string p(stmt.substr(0, 4));
+        std::transform(p.begin(), p.end(), p.begin(), ::toupper);
+        if (p == "STEP") {
+            step1 = true;
+            stmt.remove_prefix(4);
+        }
+    }
+    auto [x1, y1] = parseCoordinates(stmt);
+    if (step1) {
+        x1 += gfx_.getCursorX();
+        y1 += gfx_.getCursorY();
+    }
+    gfx_.setCursor(x1, y1);
+
+    while (!stmt.empty() && stmt.front() != '-') stmt.remove_prefix(1);
+    if (!stmt.empty() && stmt.front() == '-') stmt.remove_prefix(1);
+
+    while (!stmt.empty() && std::isspace(static_cast<unsigned char>(stmt.front()))) stmt.remove_prefix(1);
+    bool step2 = false;
+    if (stmt.size() >= 4) {
+        std::string p(stmt.substr(0, 4));
+        std::transform(p.begin(), p.end(), p.begin(), ::toupper);
+        if (p == "STEP") {
+            step2 = true;
+            stmt.remove_prefix(4);
+        }
+    }
+    auto [x2, y2] = parseCoordinates(stmt);
+    if (step2) {
+        x2 += x1;
+        y2 += y1;
+    }
+    gfx_.setCursor(x2, y2);
+
+    while (!stmt.empty() && stmt.front() != ',') stmt.remove_prefix(1);
+    if (!stmt.empty() && stmt.front() == ',') stmt.remove_prefix(1);
+
+    while (!stmt.empty() && std::isspace(static_cast<unsigned char>(stmt.front()))) stmt.remove_prefix(1);
+
+    // Parse array name
+    std::string array_name;
+    while (!stmt.empty() && (std::isalnum(static_cast<unsigned char>(stmt.front())) || 
+           stmt.front() == '_' || stmt.front() == '$' || stmt.front() == '%' || stmt.front() == '#' || stmt.front() == '!')) {
+        array_name += stmt.front();
+        stmt.remove_prefix(1);
+    }
+
+    std::string full_key = array_name;
+    while (!stmt.empty() && std::isspace(static_cast<unsigned char>(stmt.front()))) stmt.remove_prefix(1);
+    if (!stmt.empty() && stmt.front() == '(') {
+        full_key += '(';
+        stmt.remove_prefix(1);
+        while (!stmt.empty() && stmt.front() != ')') {
+            full_key += stmt.front();
+            stmt.remove_prefix(1);
+        }
+        if (!stmt.empty() && stmt.front() == ')') {
+            full_key += ')';
+            stmt.remove_prefix(1);
+        }
+    }
+
+    BasicGraphics::GraphicImage img = gfx_.getImage(x1, y1, x2, y2);
+    gfx_.storeImage(array_name, img);
+    if (full_key != array_name) {
+        gfx_.storeImage(full_key, img);
+    }
+}
+
+void BasicInterpreter::handleGraphicsPut(std::string_view& stmt) {
+    // Syntax: PUT [STEP] (x, y), arrayname[(index)] [, [PSET|PRESET|XOR|OR|AND]]
+    while (!stmt.empty() && std::isspace(static_cast<unsigned char>(stmt.front()))) stmt.remove_prefix(1);
+    bool step = false;
+    if (stmt.size() >= 4) {
+        std::string p(stmt.substr(0, 4));
+        std::transform(p.begin(), p.end(), p.begin(), ::toupper);
+        if (p == "STEP") {
+            step = true;
+            stmt.remove_prefix(4);
+        }
+    }
+    auto [x, y] = parseCoordinates(stmt);
+    if (step) {
+        x += gfx_.getCursorX();
+        y += gfx_.getCursorY();
+    }
+    gfx_.setCursor(x, y);
+
+    while (!stmt.empty() && stmt.front() != ',') stmt.remove_prefix(1);
+    if (!stmt.empty() && stmt.front() == ',') stmt.remove_prefix(1);
+
+    while (!stmt.empty() && std::isspace(static_cast<unsigned char>(stmt.front()))) stmt.remove_prefix(1);
+
+    // Parse array name
+    std::string array_name;
+    while (!stmt.empty() && (std::isalnum(static_cast<unsigned char>(stmt.front())) || 
+           stmt.front() == '_' || stmt.front() == '$' || stmt.front() == '%' || stmt.front() == '#' || stmt.front() == '!')) {
+        array_name += stmt.front();
+        stmt.remove_prefix(1);
+    }
+
+    std::string full_key = array_name;
+    while (!stmt.empty() && std::isspace(static_cast<unsigned char>(stmt.front()))) stmt.remove_prefix(1);
+    if (!stmt.empty() && stmt.front() == '(') {
+        full_key += '(';
+        stmt.remove_prefix(1);
+        while (!stmt.empty() && stmt.front() != ')') {
+            full_key += stmt.front();
+            stmt.remove_prefix(1);
+        }
+        if (!stmt.empty() && stmt.front() == ')') {
+            full_key += ')';
+            stmt.remove_prefix(1);
+        }
+    }
+
+    BasicGraphics::PutAction action = BasicGraphics::PutAction::Xor; // default in GW-BASIC is XOR!
+    while (!stmt.empty() && std::isspace(static_cast<unsigned char>(stmt.front()))) stmt.remove_prefix(1);
+    if (!stmt.empty() && stmt.front() == ',') {
+        stmt.remove_prefix(1);
+        while (!stmt.empty() && std::isspace(static_cast<unsigned char>(stmt.front()))) stmt.remove_prefix(1);
+        std::string act_str;
+        while (!stmt.empty() && std::isalpha(static_cast<unsigned char>(stmt.front()))) {
+            act_str += static_cast<char>(std::toupper(static_cast<unsigned char>(stmt.front())));
+            stmt.remove_prefix(1);
+        }
+        if (act_str == "PSET") action = BasicGraphics::PutAction::Pset;
+        else if (act_str == "PRESET") action = BasicGraphics::PutAction::Preset;
+        else if (act_str == "XOR") action = BasicGraphics::PutAction::Xor;
+        else if (act_str == "OR") action = BasicGraphics::PutAction::Or;
+        else if (act_str == "AND") action = BasicGraphics::PutAction::And;
+    }
+
+    const BasicGraphics::GraphicImage* img = gfx_.getImage(full_key);
+    if (!img) {
+        img = gfx_.getImage(array_name);
+    }
+
+    if (img) {
+        gfx_.putImage(x, y, *img, action);
+    }
 }
 
 void BasicInterpreter::rebuildDataPool() {
@@ -1940,8 +2273,175 @@ void BasicInterpreter::handleSound(std::string_view& stmt) {
         stmt.remove_prefix(1);
     }
     double duration = BasicEvaluator::toDouble(eval_.evaluate(stmt));
-    (void)freq;
-    (void)duration;
+
+    int f = static_cast<int>(freq);
+    int d_ticks = static_cast<int>(duration);
+    int ms = static_cast<int>(d_ticks * 54.9);
+
+    if (f < 37 || d_ticks <= 0) {
+        stopSoundAsync();
+    } else if (d_ticks <= 3) {
+#ifdef _WIN32
+        ::Beep(static_cast<DWORD>(f), static_cast<DWORD>(std::max(ms, 20)));
+#endif
+    } else {
+        playToneAsync(f, ms);
+    }
+}
+
+void BasicInterpreter::handlePlay(std::string_view& stmt) {
+    VariableValue val = eval_.evaluate(stmt);
+    std::string mml = BasicEvaluator::toString(val);
+    playMml(mml);
+}
+
+void BasicInterpreter::playMml(const std::string& mml) {
+    int octave = 4;
+    int tempo = 120;
+    int default_length = 4;
+    enum class Articulation { Normal, Legato, Staccato } articulation = Articulation::Normal;
+
+    size_t i = 0;
+    auto skip_spaces = [&]() {
+        while (i < mml.size() && std::isspace(static_cast<unsigned char>(mml[i]))) i++;
+    };
+
+    auto parse_int = [&](int def_val) -> int {
+        skip_spaces();
+        if (i >= mml.size() || !std::isdigit(static_cast<unsigned char>(mml[i]))) return def_val;
+        int val = 0;
+        while (i < mml.size() && std::isdigit(static_cast<unsigned char>(mml[i]))) {
+            val = val * 10 + (mml[i] - '0');
+            i++;
+        }
+        return val;
+    };
+
+    while (i < mml.size()) {
+        skip_spaces();
+        if (i >= mml.size()) break;
+
+        char cmd = static_cast<char>(std::toupper(static_cast<unsigned char>(mml[i++])));
+
+        if (cmd == 'O') {
+            int oct = parse_int(octave);
+            if (oct >= 0 && oct <= 6) octave = oct;
+        } else if (cmd == '>') {
+            if (octave < 6) octave++;
+        } else if (cmd == '<') {
+            if (octave > 0) octave--;
+        } else if (cmd == 'T') {
+            int t = parse_int(tempo);
+            if (t >= 32 && t <= 255) tempo = t;
+        } else if (cmd == 'L') {
+            int len = parse_int(default_length);
+            if (len >= 1 && len <= 64) default_length = len;
+        } else if (cmd == 'M') {
+            skip_spaces();
+            if (i < mml.size()) {
+                char mode = static_cast<char>(std::toupper(static_cast<unsigned char>(mml[i++])));
+                if (mode == 'N') articulation = Articulation::Normal;
+                else if (mode == 'L') articulation = Articulation::Legato;
+                else if (mode == 'S') articulation = Articulation::Staccato;
+            }
+        } else if (cmd == 'P') {
+            int len = parse_int(default_length);
+            if (len < 1 || len > 64) len = 4;
+            double mult = 1.0;
+            double dot_add = 0.5;
+            skip_spaces();
+            while (i < mml.size() && mml[i] == '.') {
+                mult += dot_add;
+                dot_add *= 0.5;
+                i++;
+                skip_spaces();
+            }
+            int pause_ms = static_cast<int>((60000.0 / tempo) * (4.0 / len) * mult);
+#ifdef _WIN32
+            ::Sleep(static_cast<DWORD>(pause_ms));
+#else
+            std::this_thread::sleep_for(std::chrono::milliseconds(pause_ms));
+#endif
+        } else if (cmd == 'N') {
+            int note_num = parse_int(0);
+            if (note_num == 0) {
+                int pause_ms = static_cast<int>((60000.0 / tempo) * (4.0 / default_length));
+#ifdef _WIN32
+                ::Sleep(static_cast<DWORD>(pause_ms));
+#else
+                std::this_thread::sleep_for(std::chrono::milliseconds(pause_ms));
+#endif
+            } else if (note_num >= 1 && note_num <= 84) {
+                int oct = (note_num - 1) / 12;
+                int semitone = (note_num - 1) % 12;
+                int midi_note = (oct + 1) * 12 + semitone;
+                double freq = 440.0 * std::pow(2.0, (midi_note - 69) / 12.0);
+                int total_ms = static_cast<int>((60000.0 / tempo) * (4.0 / default_length));
+                int sound_ms = (articulation == Articulation::Legato) ? total_ms :
+                               (articulation == Articulation::Staccato ? total_ms * 3 / 4 : total_ms * 7 / 8);
+                int rest_ms = total_ms - sound_ms;
+#ifdef _WIN32
+                if (freq >= 37.0 && sound_ms > 0) {
+                    ::Beep(static_cast<DWORD>(freq), static_cast<DWORD>(sound_ms));
+                }
+                if (rest_ms > 0) {
+                    ::Sleep(static_cast<DWORD>(rest_ms));
+                }
+#endif
+            }
+        } else if (cmd >= 'A' && cmd <= 'G') {
+            int semitone = 0;
+            switch (cmd) {
+                case 'C': semitone = 0; break;
+                case 'D': semitone = 2; break;
+                case 'E': semitone = 4; break;
+                case 'F': semitone = 5; break;
+                case 'G': semitone = 7; break;
+                case 'A': semitone = 9; break;
+                case 'B': semitone = 11; break;
+            }
+
+            skip_spaces();
+            if (i < mml.size()) {
+                if (mml[i] == '#' || mml[i] == '+') {
+                    semitone++;
+                    i++;
+                } else if (mml[i] == '-') {
+                    semitone--;
+                    i++;
+                }
+            }
+
+            int len = parse_int(default_length);
+            if (len < 1 || len > 64) len = default_length;
+
+            double mult = 1.0;
+            double dot_add = 0.5;
+            skip_spaces();
+            while (i < mml.size() && mml[i] == '.') {
+                mult += dot_add;
+                dot_add *= 0.5;
+                i++;
+                skip_spaces();
+            }
+
+            int midi_note = (octave + 1) * 12 + semitone;
+            double freq = 440.0 * std::pow(2.0, (midi_note - 69) / 12.0);
+            int total_ms = static_cast<int>((60000.0 / tempo) * (4.0 / len) * mult);
+            int sound_ms = (articulation == Articulation::Legato) ? total_ms :
+                           (articulation == Articulation::Staccato ? total_ms * 3 / 4 : total_ms * 7 / 8);
+            int rest_ms = total_ms - sound_ms;
+
+#ifdef _WIN32
+            if (freq >= 37.0 && sound_ms > 0) {
+                ::Beep(static_cast<DWORD>(freq), static_cast<DWORD>(sound_ms));
+            }
+            if (rest_ms > 0) {
+                ::Sleep(static_cast<DWORD>(rest_ms));
+            }
+#endif
+        }
+    }
 }
 
 void BasicInterpreter::handleOn(std::string_view& stmt) {

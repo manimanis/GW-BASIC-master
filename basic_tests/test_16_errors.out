@@ -1,4 +1,4 @@
-=== TEST 16 : GESTION DES ERREURS ===
+[2;1H[3;1H[5;1H[6;1H[7;1H[8;1H[9;1H[10;1H=== TEST 16 : GESTION DES ERREURS ===
 
 --------------------------------------------------------
 Suite   : TEST 16 : GESTION DES ERREURS
@@ -6,3 +6,5 @@ Total   :  4 assertions
 Reussis :  4
 Echecs  :  0
 TEST 16 PASSED
+
+Appuyez sur une touche (dans la fenetre ou la console) pour fermer...

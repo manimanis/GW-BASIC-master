@@ -1,4 +1,4 @@
-=== TEST 13 : PRINT USING ===
+[2;1H[3;1H[5;1H[6;1H[7;1H[8;1H[9;1H[10;1H=== TEST 13 : PRINT USING ===
 
 --------------------------------------------------------
 Suite   : TEST 13 : PRINT USING
@@ -6,3 +6,5 @@ Total   :  8 assertions
 Reussis :  8
 Echecs  :  0
 TEST 13 PASSED
+
+Appuyez sur une touche (dans la fenetre ou la console) pour fermer...

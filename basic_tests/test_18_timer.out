@@ -1,4 +1,4 @@
-=== TEST 18 : TIMER SYSTEME ===
+[2;1H[3;1H[5;1H[6;1H[7;1H[8;1H[9;1H[10;1H=== TEST 18 : TIMER SYSTEME ===
 
 --------------------------------------------------------
 Suite   : TEST 18 : TIMER SYSTEME
@@ -6,3 +6,5 @@ Total   :  5 assertions
 Reussis :  5
 Echecs  :  0
 TEST 18 PASSED
+
+Appuyez sur une touche (dans la fenetre ou la console) pour fermer...

@@ -1,4 +1,4 @@
-=== TEST 10 : ON GOTO / ON GOSUB ===
+[2;1H[3;1H[5;1H[6;1H[7;1H[8;1H[9;1H[10;1H=== TEST 10 : ON GOTO / ON GOSUB ===
 
 --------------------------------------------------------
 Suite   : TEST 10 : ON GOTO / ON GOSUB
@@ -6,3 +6,5 @@ Total   :  10 assertions
 Reussis :  10
 Echecs  :  0
 TEST 10 PASSED
+
+Appuyez sur une touche (dans la fenetre ou la console) pour fermer...

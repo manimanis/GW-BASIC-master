@@ -1,6 +1,8 @@
 #include "basic_graphics.h"
+#include "cga_font.h"
 #include <queue>
 #include <algorithm>
+#include <cstring>
 
 namespace gwbasic {
 
@@ -469,6 +471,82 @@ const BasicGraphics::GraphicImage* BasicGraphics::getImage(const std::string& na
         return &it->second;
     }
     return nullptr;
+}
+
+void BasicGraphics::drawChar(int x, int y, uint8_t ch, uint8_t fg_color, uint8_t bg_color, bool transparent_bg) {
+    const uint8_t* glyph = CGA_FONT_8X8[ch];
+    for (int r = 0; r < 8; ++r) {
+        int py = y + r;
+        if (py < 0 || py >= height_) continue;
+        uint8_t bits = glyph[r];
+        for (int c = 0; c < 8; ++c) {
+            int px = x + c;
+            if (px < 0 || px >= width_) continue;
+            bool is_on = ((bits >> (7 - c)) & 1) != 0;
+            if (is_on) {
+                framebuffer_[static_cast<size_t>(py * width_ + px)] = fg_color;
+            } else if (!transparent_bg) {
+                framebuffer_[static_cast<size_t>(py * width_ + px)] = bg_color;
+            }
+        }
+    }
+    dirty_ = true;
+}
+
+void BasicGraphics::scrollUp(int pixels) {
+    if (pixels <= 0 || pixels >= height_) return;
+    size_t copy_bytes = static_cast<size_t>((height_ - pixels) * width_);
+    std::memmove(&framebuffer_[0], &framebuffer_[static_cast<size_t>(pixels * width_)], copy_bytes);
+    std::fill(framebuffer_.begin() + copy_bytes, framebuffer_.end(), background_color_);
+    dirty_ = true;
+}
+
+void BasicGraphics::printString(const std::string& text, int& row, int& col, uint8_t fg_color, uint8_t bg_color) {
+    int max_cols = (mode_ == ScreenMode::MediumRes) ? 40 : 80;
+    int max_rows = 25;
+
+    for (size_t i = 0; i < text.size(); ++i) {
+        char c = text[i];
+        if (c == '\r') {
+            col = 1;
+        } else if (c == '\n') {
+            col = 1;
+            row++;
+            if (row > max_rows) {
+                scrollUp(8);
+                row = max_rows;
+            }
+        } else if (c == '\t') {
+            // Tab stop every 14 columns in GW-BASIC standard
+            col = ((col - 1) / 14 + 1) * 14 + 1;
+            if (col > max_cols) {
+                col = 1;
+                row++;
+                if (row > max_rows) {
+                    scrollUp(8);
+                    row = max_rows;
+                }
+            }
+        } else if (c == '\x08') { // Backspace
+            if (col > 1) col--;
+        } else {
+            if (row < 1) row = 1;
+            if (col < 1) col = 1;
+            int px = (col - 1) * 8;
+            int py = (row - 1) * 8;
+            drawChar(px, py, static_cast<uint8_t>(c), fg_color, bg_color, false);
+            col++;
+            if (col > max_cols) {
+                col = 1;
+                row++;
+                if (row > max_rows) {
+                    scrollUp(8);
+                    row = max_rows;
+                }
+            }
+        }
+    }
+    dirty_ = true;
 }
 
 } // namespace gwbasic

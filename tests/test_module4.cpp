@@ -48,6 +48,22 @@ void test_console_and_keys() {
     assert(console.inkey() == "B");
     assert(console.inkey() == "");
 
+    // Test digits and Escape (CHR$(27))
+    console.pushKey("1");
+    console.pushKey("\x1B");
+    assert(console.inkey() == "1");
+    assert(console.inkey() == "\x1B");
+    assert(console.inkey() == "");
+
+    // Test 2-byte extended keys (arrows, F-keys)
+    console.pushKey(std::string("\0H", 2)); // Up arrow
+    console.pushKey(std::string("\0;", 2)); // F1
+    std::string up = console.inkey();
+    assert(up.size() == 2 && up[0] == '\0' && up[1] == 'H');
+    std::string f1 = console.inkey();
+    assert(f1.size() == 2 && f1[0] == '\0' && f1[1] == ';');
+    assert(console.inkey() == "");
+
     console.locate(10, 20);
     assert(console.getCsrlin() == 10);
     assert(console.getPos() == 20);

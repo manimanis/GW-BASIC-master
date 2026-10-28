@@ -110,6 +110,8 @@ private:
     void handleClose(std::string_view& stmt);
     void handleInput(std::string_view& stmt);
     void handleLineInput(std::string_view& stmt);
+    std::string readConsoleLine(const std::string& prompt);
+    void printTextToScreen(const std::string& text);
     void handleLocate(std::string_view& stmt);
     void handleColor(std::string_view& stmt);
     void handleWidth(std::string_view& stmt);
@@ -134,6 +136,8 @@ private:
     void handlePoke(std::string_view& stmt);
     void handleBeep();
     void handleSound(std::string_view& stmt);
+    void handlePlay(std::string_view& stmt);
+    void playMml(const std::string& mml);
     void handleOn(std::string_view& stmt);
     void handleDim(std::string_view& stmt);
 

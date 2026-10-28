@@ -1,4 +1,4 @@
-=== TEST 21 : FICHIERS AVANCES ===
+[2;1H[3;1H[5;1H[6;1H[7;1H[8;1H[9;1H[10;1H=== TEST 21 : FICHIERS AVANCES ===
 
 --------------------------------------------------------
 Suite   : TEST 21 : FICHIERS AVANCES
@@ -6,3 +6,5 @@ Total   :  15 assertions
 Reussis :  15
 Echecs  :  0
 TEST 21 PASSED
+
+Appuyez sur une touche (dans la fenetre ou la console) pour fermer...

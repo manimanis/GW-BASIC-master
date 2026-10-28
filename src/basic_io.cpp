@@ -2,6 +2,7 @@
 #include <iostream>
 #include <algorithm>
 #include <cctype>
+#include <thread>
 
 #ifdef _WIN32
 #include <conio.h>
@@ -230,6 +231,11 @@ ConsoleIO::ConsoleIO() {}
 
 std::string ConsoleIO::inkey() {
     if (!key_buffer_.empty()) {
+        if (key_buffer_.front() == '\0' && key_buffer_.size() >= 2) {
+            std::string res = key_buffer_.substr(0, 2);
+            key_buffer_.erase(0, 2);
+            return res;
+        }
         std::string res(1, key_buffer_.front());
         key_buffer_.erase(0, 1);
         return res;
@@ -249,6 +255,7 @@ std::string ConsoleIO::inkey() {
     }
 #endif
 
+    std::this_thread::yield();
     return "";
 }
 

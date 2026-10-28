@@ -1,4 +1,4 @@
-=== TEST 06 : DATA / READ / RESTORE ===
+[2;1H[3;1H[5;1H[7;1H[8;1H[9;1H[10;1H[11;1H=== TEST 06 : DATA / READ / RESTORE ===
 
 --------------------------------------------------------
 Suite   : TEST 06 : DATA / READ / RESTORE
@@ -6,3 +6,5 @@ Total   :  18 assertions
 Reussis :  18
 Echecs  :  0
 TEST 06 PASSED
+
+Appuyez sur une touche (dans la fenetre ou la console) pour fermer...

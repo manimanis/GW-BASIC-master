@@ -75,6 +75,11 @@ public:
     bool hasImage(const std::string& name) const;
     const GraphicImage* getImage(const std::string& name) const;
 
+    // Character and text rendering (SCNDRV.ASM)
+    void drawChar(int x, int y, uint8_t ch, uint8_t fg_color, uint8_t bg_color, bool transparent_bg = false);
+    void printString(const std::string& text, int& row, int& col, uint8_t fg_color, uint8_t bg_color);
+    void scrollUp(int pixels);
+
     // Framebuffer access
     const std::vector<uint8_t>& getFramebuffer() const { return framebuffer_; }
     bool isValidCoord(int x, int y) const;
@@ -82,6 +87,7 @@ public:
     // Dirty flag: set when any drawing operation modifies the framebuffer
     bool isDirty() const { return dirty_; }
     void clearDirty() { dirty_ = false; }
+    void markDirty() { dirty_ = true; }
 
     // Current graphics cursor position
     int getCursorX() const { return cursor_x_; }

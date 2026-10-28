@@ -30,7 +30,7 @@ set TESTS=test_01_print test_02_variables test_03_math test_04_strings ^
           test_11_random test_12_peek_poke_swap test_13_print_using ^
           test_14_multistatement test_15_integration test_16_errors ^
           test_17_logic test_18_timer ^
-          test_20_functions test_21_file_io_advanced
+          test_20_functions test_21_file_io_advanced test_22_get_put_sound_play
 
 for %%T in (%TESTS%) do (
     set /a TOTAL+=1
